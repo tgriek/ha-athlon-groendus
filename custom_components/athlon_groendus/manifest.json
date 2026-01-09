@@ -11,7 +11,7 @@
     "boto3==1.42.24",
     "warrant-lite==1.0.4"
   ],
-  "version": "0.1.2"
+  "version": "0.1.3"
 }
 
 
