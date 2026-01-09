@@ -9,13 +9,16 @@ import aiohttp
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config as BotoConfig
-from warrant_lite import WarrantLite
+from warrant_lite import ForceChangePasswordException, WarrantLite
 
 from .const import (
     APPSYNC_GRAPHQL_URL,
+    CLIENT_GROUP,
     COGNITO_CLIENT_ID,
     COGNITO_REGION,
     COGNITO_USER_POOL_ID,
+    LABEL,
+    PORTAL_URL,
 )
 
 
@@ -108,6 +111,47 @@ class AthlonGroendusClient:
     async def authenticate(self) -> None:
         """Authenticate via Cognito SRP and store tokens."""
 
+        client_metadata: dict[str, str] = {
+            # Matches the web portal (see getClientMetadata() in the frontend bundle)
+            "client": CLIENT_GROUP,
+            "label": LABEL,
+            "portalUrl": PORTAL_URL,
+        }
+
+        class _WarrantLiteWithClientMetadata(WarrantLite):
+            """WarrantLite variant that forwards ClientMetadata required by Cognito triggers."""
+
+            def __init__(self, *args: Any, client_metadata: dict[str, str] | None = None, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                self._client_metadata = client_metadata or {}
+
+            def authenticate_user(self, client: Any = None) -> Any:  # type: ignore[override]
+                boto_client = self.client or client
+                auth_params = self.get_auth_params()
+                response = boto_client.initiate_auth(
+                    AuthFlow="USER_SRP_AUTH",
+                    AuthParameters=auth_params,
+                    ClientId=self.client_id,
+                    ClientMetadata=self._client_metadata,
+                )
+
+                if response["ChallengeName"] == self.PASSWORD_VERIFIER_CHALLENGE:
+                    challenge_response = self.process_challenge(response["ChallengeParameters"])
+                    challenge_response["USERNAME"] = self.username
+                    tokens = boto_client.respond_to_auth_challenge(
+                        ClientId=self.client_id,
+                        ChallengeName=self.PASSWORD_VERIFIER_CHALLENGE,
+                        ChallengeResponses=challenge_response,
+                        ClientMetadata=self._client_metadata,
+                    )
+
+                    if tokens.get("ChallengeName") == self.NEW_PASSWORD_REQUIRED_CHALLENGE:
+                        raise ForceChangePasswordException("Change password before authenticating")
+
+                    return tokens
+
+                raise NotImplementedError(f"The {response['ChallengeName']} challenge is not supported")
+
         def _do_auth() -> Tokens:
             client = boto3.client(
                 "cognito-idp",
@@ -122,6 +166,14 @@ class AthlonGroendusClient:
                 pool_id=COGNITO_USER_POOL_ID,
                 client_id=COGNITO_CLIENT_ID,
                 client=client,
+            )
+            aws = _WarrantLiteWithClientMetadata(
+                username=self._email,
+                password=self._password,
+                pool_id=COGNITO_USER_POOL_ID,
+                client_id=COGNITO_CLIENT_ID,
+                client=client,
+                client_metadata=client_metadata,
             )
             tokens = aws.authenticate_user()
             auth = tokens.get("AuthenticationResult") or {}

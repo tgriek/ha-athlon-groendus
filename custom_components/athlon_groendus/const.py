@@ -15,6 +15,11 @@ COGNITO_CLIENT_ID = "387nbhei8uvf13f7ck4c5ivaa2"
 COGNITO_REGION = "eu-central-1"
 APPSYNC_GRAPHQL_URL = "https://kylqo4g6gres3lmw4rtqaoftke.appsync-api.eu-central-1.amazonaws.com/graphql"
 
+# Portal metadata (used by Cognito Lambda triggers via ClientMetadata)
+PORTAL_URL = "https://athlon.groendus.nl/"
+CLIENT_GROUP = "Portal"
+LABEL = "athlon"
+
 STORE_VERSION = 1
 STORE_KEY_FMT = f"{DOMAIN}.{{entry_id}}"
 
