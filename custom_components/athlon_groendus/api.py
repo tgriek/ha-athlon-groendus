@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
+import json
 from typing import Any
 
 import aiohttp
@@ -228,13 +229,21 @@ class AthlonGroendusClient:
         *,
         page: int = 1,
         size: int = 50,
-        # The portal sends sort as an object like { startDateTime: "DESC" }.
-        # Sending a string (e.g. "startDateTime:DESC") causes GraphQL validation errors.
-        sort: dict[str, str] | None = None,
+        # AppSync schema defines PageInput.sort as AWSJSON -> must be a JSON-encoded string.
+        # The portal uses: {"startDateTime":"DESC"} (stringified).
+        sort: dict[str, str] | str | None = None,
         filter_: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        sort_json: str
+        if sort is None:
+            sort_json = json.dumps({"startDateTime": "DESC"})
+        elif isinstance(sort, str):
+            sort_json = sort
+        else:
+            sort_json = json.dumps(sort)
+
         variables: dict[str, Any] = {
-            "page": {"page": page, "size": size, "sort": sort or {"startDateTime": "DESC"}},
+            "page": {"page": page, "size": size, "sort": sort_json},
             "filter": filter_,
         }
         data = await self._graphql(QUERY_TRANSACTIONS, variables=variables)

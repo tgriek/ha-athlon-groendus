@@ -3,15 +3,15 @@
   "name": "Athlon Groendus",
   "codeowners": ["@tgriek"],
   "config_flow": true,
-  "documentation": "https://github.com/tgriek/athlon-groendus-ha",
+  "documentation": "https://github.com/tgriek/ha-athlon-groendus",
   "integration_type": "device",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/tgriek/athlon-groendus-ha/issues",
+  "issue_tracker": "https://github.com/tgriek/ha-athlon-groendus/issues",
   "requirements": [
     "boto3==1.42.24",
     "warrant-lite==1.0.4"
   ],
-  "version": "0.1.4"
+  "version": "0.1.5"
 }
 
 

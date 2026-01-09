@@ -38,5 +38,18 @@ The portal uses:
 - **AWS Cognito** for authentication (region `eu-central-1`)
 - **AWS AppSync (GraphQL)** for data, including `listTransactions` (charging sessions)
 
+## Standalone verification (no Home Assistant)
+
+If you want to verify login + API calls outside HA, use:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r tools/requirements.txt
+python tools/verify_standalone.py
+```
+
+It reads `ATHLON_GROENDUS_EMAIL` / `ATHLON_GROENDUS_PASSWORD` from your environment or `.env`.
+
 
 # ha-athlon-groendus
