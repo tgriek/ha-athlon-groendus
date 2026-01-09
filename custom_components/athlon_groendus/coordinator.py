@@ -92,7 +92,7 @@ class AthlonGroendusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             fetched_txs: list[dict[str, Any]] = []
 
             for page in range(1, self._max_pages + 1):
-                result = await self._client.list_transactions(page=page, size=50, sort="startDateTime:DESC")
+                result = await self._client.list_transactions(page=page, size=50, sort={"startDateTime": "DESC"})
                 items = result.get("items") or []
                 if not items:
                     break

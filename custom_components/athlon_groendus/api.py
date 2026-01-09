@@ -228,11 +228,13 @@ class AthlonGroendusClient:
         *,
         page: int = 1,
         size: int = 50,
-        sort: str = "startDateTime:DESC",
+        # The portal sends sort as an object like { startDateTime: "DESC" }.
+        # Sending a string (e.g. "startDateTime:DESC") causes GraphQL validation errors.
+        sort: dict[str, str] | None = None,
         filter_: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         variables: dict[str, Any] = {
-            "page": {"page": page, "size": size, "sort": sort},
+            "page": {"page": page, "size": size, "sort": sort or {"startDateTime": "DESC"}},
             "filter": filter_,
         }
         data = await self._graphql(QUERY_TRANSACTIONS, variables=variables)
