@@ -1,0 +1,17 @@
+{
+  "domain": "athlon_groendus",
+  "name": "Athlon Groendus",
+  "codeowners": ["@tgriek"],
+  "config_flow": true,
+  "documentation": "https://github.com/tgriek/athlon-groendus-ha",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/tgriek/athlon-groendus-ha/issues",
+  "requirements": [
+    "boto3==1.42.24",
+    "warrant-lite==1.0.4"
+  ],
+  "version": "0.1.0"
+}
+
+

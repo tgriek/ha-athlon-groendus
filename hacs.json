@@ -1,0 +1,8 @@
+{
+  "name": "Athlon Groendus",
+  "content_in_root": false,
+  "domains": ["athlon_groendus"],
+  "homeassistant": "2024.12.0"
+}
+
+

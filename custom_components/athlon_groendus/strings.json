@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Athlon Groendus",
+        "description": "Enter the login details you use on athlon.groendus.nl.\n\nNote: Home Assistant will store these credentials in the config entry so it can refresh data.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "select_chargepoint": {
+        "title": "Select chargepoint",
+        "description": "Choose which chargepoint you want to track.",
+        "data": {
+          "chargepoint_id": "Chargepoint"
+        }
+      }
+    },
+    "error": {
+      "auth": "Authentication failed. Check your email/password.",
+      "no_chargepoints": "No chargepoints found on this account.",
+      "unknown": "Unexpected error. Check the logs for details."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Athlon Groendus options",
+        "data": {
+          "update_interval_seconds": "Update interval (seconds)",
+          "max_pages": "Max pages to scan for new sessions"
+        }
+      }
+    }
+  }
+}
+
+
