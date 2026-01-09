@@ -62,6 +62,7 @@ class AthlonGroendusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         super().__init__(
             hass,
+            logger=_LOGGER,
             name="athlon_groendus",
             update_interval=timedelta(seconds=update_interval_seconds),
         )
