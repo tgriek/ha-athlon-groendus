@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import logging
 from typing import Any
 
 import aiohttp
 import boto3
+from botocore import UNSIGNED
 from botocore.config import Config as BotoConfig
 from warrant_lite import WarrantLite
 
@@ -23,6 +25,8 @@ class AthlonGroendusAuthError(Exception):
 
 class AthlonGroendusApiError(Exception):
     """API request failed."""
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -108,7 +112,9 @@ class AthlonGroendusClient:
             client = boto3.client(
                 "cognito-idp",
                 region_name=COGNITO_REGION,
-                config=BotoConfig(signature_version="v4"),
+                # Cognito User Pool auth APIs (InitiateAuth / RespondToAuthChallenge)
+                # are public and must be called unsigned (no AWS credentials required).
+                config=BotoConfig(signature_version=UNSIGNED),
             )
             aws = WarrantLite(
                 username=self._email,
@@ -133,6 +139,7 @@ class AthlonGroendusClient:
         try:
             self._tokens = await asyncio.get_running_loop().run_in_executor(None, _do_auth)
         except Exception as err:  # noqa: BLE001 (HA uses broad handling here)
+            _LOGGER.exception("Authentication failed (%s): %s", type(err).__name__, err)
             raise AthlonGroendusAuthError(str(err)) from err
 
     async def _graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
