@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass
 import logging
 import json
+import time
 from typing import Any
 
 import aiohttp
@@ -108,6 +109,25 @@ class AthlonGroendusClient:
         self._email = email
         self._password = password
         self._tokens: Tokens | None = None
+        self._token_expires_at: float | None = None
+        self._auth_lock = asyncio.Lock()
+
+    def _token_is_valid(self) -> bool:
+        """Return True when we have a token that is not about to expire."""
+        if self._tokens is None or self._token_expires_at is None:
+            return False
+        # Refresh a bit early to avoid edge cases.
+        return time.time() < (self._token_expires_at - 60)
+
+    async def _ensure_authenticated(self) -> None:
+        """Ensure we have a valid token, re-authenticating if needed."""
+        if self._token_is_valid():
+            return
+        async with self._auth_lock:
+            # Another waiter may already have refreshed.
+            if self._token_is_valid():
+                return
+            await self.authenticate()
 
     async def authenticate(self) -> None:
         """Authenticate via Cognito SRP and store tokens."""
@@ -191,34 +211,59 @@ class AthlonGroendusClient:
 
         try:
             self._tokens = await asyncio.get_running_loop().run_in_executor(None, _do_auth)
+            self._token_expires_at = time.time() + int(self._tokens.expires_in or 3600)
         except Exception as err:  # noqa: BLE001 (HA uses broad handling here)
             _LOGGER.exception("Authentication failed (%s): %s", type(err).__name__, err)
             raise AthlonGroendusAuthError(str(err)) from err
 
     async def _graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
-        if self._tokens is None:
-            await self.authenticate()
+        # (Re)authenticate if needed before calling AppSync.
+        await self._ensure_authenticated()
 
         payload: dict[str, Any] = {"query": query}
         if variables is not None:
             payload["variables"] = variables
 
-        headers = {
-            "Authorization": self._tokens.id_token,
-            "Content-Type": "application/json",
-        }
+        # Retry once on auth errors (expired token, etc.)
+        for attempt in (1, 2):
+            headers = {
+                "Authorization": self._tokens.id_token if self._tokens else "empty",
+                "Content-Type": "application/json",
+            }
 
-        async with self._session.post(
-            APPSYNC_GRAPHQL_URL,
-            json=payload,
-            headers=headers,
-            timeout=aiohttp.ClientTimeout(total=30),
-        ) as resp:
-            data = await resp.json()
+            try:
+                async with self._session.post(
+                    APPSYNC_GRAPHQL_URL,
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as resp:
+                    data = await resp.json()
+            except aiohttp.ClientResponseError as err:
+                # If AppSync returns 401/403, refresh token and retry once.
+                if attempt == 1 and err.status in (401, 403):
+                    _LOGGER.info("AppSync returned %s, refreshing token and retrying", err.status)
+                    self._tokens = None
+                    self._token_expires_at = None
+                    await self._ensure_authenticated()
+                    continue
+                raise
 
-        if "errors" in data:
-            raise AthlonGroendusApiError(str(data["errors"]))
-        return data.get("data") or {}
+            errors = data.get("errors")
+            if errors:
+                # Detect auth-related GraphQL errors and retry once.
+                err_str = str(errors)
+                if attempt == 1 and ("Unauthorized" in err_str or "NotAuthorized" in err_str):
+                    _LOGGER.info("AppSync unauthorized, refreshing token and retrying")
+                    self._tokens = None
+                    self._token_expires_at = None
+                    await self._ensure_authenticated()
+                    continue
+                raise AthlonGroendusApiError(err_str)
+
+            return data.get("data") or {}
+
+        raise AthlonGroendusApiError("GraphQL request failed after retry")
 
     async def get_driver_and_chargepoints(self) -> dict[str, Any]:
         data = await self._graphql(QUERY_BOOTSTRAP)
