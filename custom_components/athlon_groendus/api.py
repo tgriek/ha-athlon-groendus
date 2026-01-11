@@ -181,13 +181,6 @@ class AthlonGroendusClient:
                 # are public and must be called unsigned (no AWS credentials required).
                 config=BotoConfig(signature_version=UNSIGNED),
             )
-            aws = WarrantLite(
-                username=self._email,
-                password=self._password,
-                pool_id=COGNITO_USER_POOL_ID,
-                client_id=COGNITO_CLIENT_ID,
-                client=client,
-            )
             aws = _WarrantLiteWithClientMetadata(
                 username=self._email,
                 password=self._password,

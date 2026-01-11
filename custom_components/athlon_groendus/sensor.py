@@ -89,7 +89,6 @@ class AthlonGroendusLastSessionEnergySensor(_LastSessionBase):
     _attr_name = "Athlon last session energy"
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self) -> str:
@@ -121,7 +120,6 @@ class AthlonGroendusLastSessionCostSensor(_LastSessionBase):
     _attr_name = "Athlon last session cost"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = CURRENCY_EURO
-    _attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def unique_id(self) -> str:
