@@ -62,7 +62,9 @@ This creates two **external statistics**:
 
 ### Using it in the Energy Dashboard
 
-In **Settings → Dashboards → Energy → Add consumption**, pick the `athlon_groendus:..._energy` statistic, and select the `..._cost` statistic as the tracked cost.
+In **Settings → Dashboards → Energy → Individual devices → Add device**, pick the `athlon_groendus:..._energy` statistic.
+
+The Energy Dashboard tracks **energy only** for individual devices — `DeviceConsumption` has no cost field, so the `..._cost` statistic cannot be attached there (per-source cost tracking exists only for grid, gas and water). Use it in a statistics card, a template, or the statistics graph instead.
 
 > **Do not also keep the live `sensor.athlon_charging_energy_total` as a source.** The external statistic already covers every session including new ones, so having both counts the same kWh twice.
 
