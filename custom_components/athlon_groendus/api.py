@@ -19,13 +19,17 @@ from .const import (
     COGNITO_CLIENT_ID,
     COGNITO_REGION,
     COGNITO_USER_POOL_ID,
-    LABEL,
-    PORTAL_URL,
+    DEFAULT_LABEL,
+    DEFAULT_PORTAL_URL,
 )
 
 
 class AthlonGroendusAuthError(Exception):
     """Authentication failed."""
+
+
+class AthlonGroendusLabelError(AthlonGroendusAuthError):
+    """The credentials are fine but the account is not part of the configured label."""
 
 
 class AthlonGroendusApiError(Exception):
@@ -40,6 +44,27 @@ class Tokens:
     access_token: str
     refresh_token: str | None
     expires_in: int
+
+
+@dataclass
+class PortalConfig:
+    """AWS backend config as published by the portal at /api/config."""
+
+    user_pool_id: str = COGNITO_USER_POOL_ID
+    client_id: str = COGNITO_CLIENT_ID
+    region: str = COGNITO_REGION
+    graphql_url: str = APPSYNC_GRAPHQL_URL
+
+    @classmethod
+    def from_api(cls, data: dict[str, Any]) -> "PortalConfig":
+        cognito = data.get("cognito") or {}
+        appsync = data.get("appSync") or {}
+        return cls(
+            user_pool_id=cognito.get("userPoolId") or COGNITO_USER_POOL_ID,
+            client_id=cognito.get("clientId") or COGNITO_CLIENT_ID,
+            region=data.get("region") or COGNITO_REGION,
+            graphql_url=appsync.get("url") or APPSYNC_GRAPHQL_URL,
+        )
 
 
 QUERY_BOOTSTRAP = """
@@ -104,13 +129,56 @@ query TransactionListPage($page: PageInput, $filter: FilterInput) {
 class AthlonGroendusClient:
     """Athlon Groendus AppSync GraphQL client."""
 
-    def __init__(self, session: aiohttp.ClientSession, email: str, password: str) -> None:
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        email: str,
+        password: str,
+        *,
+        portal_url: str = DEFAULT_PORTAL_URL,
+        label: str = DEFAULT_LABEL,
+    ) -> None:
         self._session = session
         self._email = email
         self._password = password
+        self._portal_url = portal_url if portal_url.endswith("/") else f"{portal_url}/"
+        self._label = label
+        self._config: PortalConfig | None = None
         self._tokens: Tokens | None = None
         self._token_expires_at: float | None = None
         self._auth_lock = asyncio.Lock()
+
+    async def async_get_config(self) -> PortalConfig:
+        """Fetch the portal's AWS config, falling back to the bundled defaults."""
+        if self._config is not None:
+            return self._config
+
+        url = f"{self._portal_url}api/config"
+        try:
+            async with self._session.get(
+                url,
+                # The portal's WAF answers 502 unless the request carries a
+                # Referer, which the browser sends automatically for the
+                # frontend's own XHR to /api/config.
+                headers={"Accept": "application/json", "Referer": self._portal_url},
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json(content_type=None)
+            self._config = PortalConfig.from_api(data)
+            _LOGGER.debug(
+                "Discovered portal config from %s: pool=%s graphql=%s",
+                url,
+                self._config.user_pool_id,
+                self._config.graphql_url,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Could not fetch portal config from %s (%s); using bundled defaults", url, err
+            )
+            self._config = PortalConfig()
+
+        return self._config
 
     def _token_is_valid(self) -> bool:
         """Return True when we have a token that is not about to expire."""
@@ -132,11 +200,13 @@ class AthlonGroendusClient:
     async def authenticate(self) -> None:
         """Authenticate via Cognito SRP and store tokens."""
 
+        config = await self.async_get_config()
+
         client_metadata: dict[str, str] = {
             # Matches the web portal (see getClientMetadata() in the frontend bundle)
             "client": CLIENT_GROUP,
-            "label": LABEL,
-            "portalUrl": PORTAL_URL,
+            "label": self._label,
+            "portalUrl": self._portal_url,
         }
 
         class _WarrantLiteWithClientMetadata(WarrantLite):
@@ -176,7 +246,7 @@ class AthlonGroendusClient:
         def _do_auth() -> Tokens:
             client = boto3.client(
                 "cognito-idp",
-                region_name=COGNITO_REGION,
+                region_name=config.region,
                 # Cognito User Pool auth APIs (InitiateAuth / RespondToAuthChallenge)
                 # are public and must be called unsigned (no AWS credentials required).
                 config=BotoConfig(signature_version=UNSIGNED),
@@ -184,8 +254,8 @@ class AthlonGroendusClient:
             aws = _WarrantLiteWithClientMetadata(
                 username=self._email,
                 password=self._password,
-                pool_id=COGNITO_USER_POOL_ID,
-                client_id=COGNITO_CLIENT_ID,
+                pool_id=config.user_pool_id,
+                client_id=config.client_id,
                 client=client,
                 client_metadata=client_metadata,
             )
@@ -207,11 +277,20 @@ class AthlonGroendusClient:
             self._token_expires_at = time.time() + int(self._tokens.expires_in or 3600)
         except Exception as err:  # noqa: BLE001 (HA uses broad handling here)
             _LOGGER.exception("Authentication failed (%s): %s", type(err).__name__, err)
+            # The PreAuthentication Lambda rejects accounts that belong to a
+            # different tenant. Surface that as its own error so the user knows
+            # to change the label/portal URL rather than their password.
+            if "is not part of the" in str(err):
+                raise AthlonGroendusLabelError(
+                    f"Account is not part of the '{self._label}' label "
+                    f"(portal {self._portal_url}): {err}"
+                ) from err
             raise AthlonGroendusAuthError(str(err)) from err
 
     async def _graphql(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         # (Re)authenticate if needed before calling AppSync.
         await self._ensure_authenticated()
+        graphql_url = (await self.async_get_config()).graphql_url
 
         payload: dict[str, Any] = {"query": query}
         if variables is not None:
@@ -226,7 +305,7 @@ class AthlonGroendusClient:
 
             try:
                 async with self._session.post(
-                    APPSYNC_GRAPHQL_URL,
+                    graphql_url,
                     json=payload,
                     headers=headers,
                     timeout=aiohttp.ClientTimeout(total=30),

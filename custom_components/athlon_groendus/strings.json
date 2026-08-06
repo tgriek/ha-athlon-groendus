@@ -3,10 +3,12 @@
     "step": {
       "user": {
         "title": "Connect to Athlon Groendus",
-        "description": "Enter the login details you use on athlon.groendus.nl.\n\nNote: Home Assistant will store these credentials in the config entry so it can refresh data.",
+        "description": "Enter the login details you use on the Groendus charging portal (thuisladen.groendus.nl).\n\nPortal URL: change this if your portal moves to another address.\nLabel: the tenant your account belongs to. Leave empty to derive it from the portal URL (thuisladen.groendus.nl → groendus).\n\nNote: Home Assistant will store these credentials in the config entry so it can refresh data.",
         "data": {
           "email": "Email",
-          "password": "Password"
+          "password": "Password",
+          "portal_url": "Portal URL",
+          "label": "Label (optional)"
         }
       },
       "select_chargepoint": {
@@ -19,6 +21,7 @@
     },
     "error": {
       "auth": "Authentication failed. Check your email/password.",
+      "wrong_label": "Your account is not part of this label. Check the portal URL and label (for example 'groendus' for thuisladen.groendus.nl).",
       "no_chargepoints": "No chargepoints found on this account.",
       "unknown": "Unexpected error. Check the logs for details."
     }
@@ -27,13 +30,19 @@
     "step": {
       "init": {
         "title": "Athlon Groendus options",
+        "description": "The portal URL and label are validated against your stored credentials when you save.",
         "data": {
           "update_interval_seconds": "Update interval (seconds)",
-          "max_pages": "Max pages to scan for new sessions"
+          "max_pages": "Max pages to scan for new sessions",
+          "portal_url": "Portal URL",
+          "label": "Label (empty = derive from portal URL)"
         }
       }
+    },
+    "error": {
+      "auth": "Authentication failed with the stored credentials.",
+      "wrong_label": "Your account is not part of this label. Check the portal URL and label (for example 'groendus' for thuisladen.groendus.nl).",
+      "unknown": "Unexpected error. Check the logs for details."
     }
   }
 }
-
-
