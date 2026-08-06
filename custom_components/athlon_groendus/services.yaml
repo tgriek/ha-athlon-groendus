@@ -1,0 +1,17 @@
+import_history:
+  name: Import history
+  description: >-
+    Import the full charging history from the Groendus portal as long-term
+    statistics, so past sessions show up in the Energy Dashboard. Safe to run
+    more than once: statistics are keyed per hour, so a repeat run overwrites
+    those hours instead of adding to them.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: >-
+        Only import for this config entry. Leave empty to import for every
+        configured Athlon Groendus account.
+      required: false
+      example: 01JABCDEF0123456789ABCDEFG
+      selector:
+        text:

@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import AthlonGroendusClient
 from .const import DEFAULT_MAX_PAGES, DEFAULT_UPDATE_INTERVAL_SECONDS, STORE_KEY_FMT, STORE_VERSION
+from .statistics import async_import_history
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,12 +73,48 @@ class AthlonGroendusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._max_pages = max_pages
         self._store = EntryStore(hass, entry_id)
         self._acc_state: EnergyAccumulatorState | None = None
+        self._stats_imported = False
+        self._last_driver: dict[str, Any] = {}
 
     @property
     def accumulator(self) -> EnergyAccumulatorState:
         if self._acc_state is None:
             return EnergyAccumulatorState()
         return self._acc_state
+
+    @property
+    def currency(self) -> str:
+        """Currency of the chargepoint tariff, for the cost statistic."""
+        driver = self._last_driver or (self.data or {}).get("driver") or {}
+        for cp in driver.get("chargepoints") or []:
+            if cp.get("chargepointId") == self._chargepoint_id:
+                currency = (cp.get("currentTariff") or {}).get("currency")
+                if currency:
+                    return str(currency)
+        return "EUR"
+
+    async def async_import_history(self) -> dict[str, Any]:
+        """Import the full portal history as long-term statistics."""
+        summary = await async_import_history(
+            self.hass, self._client, self._chargepoint_id, self.currency
+        )
+        self._stats_imported = True
+        return summary
+
+    async def _async_maybe_import_history(self, has_new_sessions: bool) -> None:
+        """Backfill statistics once at startup, then whenever a session lands.
+
+        Re-importing is idempotent (statistics are keyed per hour), and new
+        sessions are rare, so recomputing the whole series keeps the running
+        totals consistent without tracking a separate baseline.
+        """
+        if self._stats_imported and not has_new_sessions:
+            return
+        try:
+            await self.async_import_history()
+        except Exception as err:  # noqa: BLE001
+            # Never fail the poll over statistics; the sensors matter more.
+            _LOGGER.warning("Could not import historical statistics: %s", err)
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -157,6 +194,11 @@ class AthlonGroendusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 key=lambda t: t.get("startDateTime") or "",
                 reverse=True,
             )
+
+            # Kept separately because self.data is only assigned after this
+            # method returns, and the cost statistic needs the tariff currency.
+            self._last_driver = driver
+            await self._async_maybe_import_history(bool(new_txs))
 
             return {
                 "driver": driver,

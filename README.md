@@ -7,6 +7,7 @@ Home Assistant custom integration (HACS-ready) to fetch **charging sessions** fr
 - **Config flow**: enter login details, then **select a chargepoint**
 - **Energy Dashboard sensor**: monotonic **total kWh** (`state_class: total_increasing`, `device_class: energy`)
 - **Session sensors**: “last session energy” and “last session cost” with useful attributes
+- **Historical backfill**: imports the full portal history (energy and cost) as long-term statistics
 
 ## Install (HACS)
 
@@ -40,6 +41,34 @@ Home Assistant stores integration data in the config entry. This integration sto
 ## Energy Dashboard
 
 Add the entity **“Athlon charging energy total”** as an energy source in **Settings → Dashboards → Energy**.
+
+## Historical data
+
+The portal keeps your full session history, so the Energy Dashboard can be backfilled with charging that happened before the integration was installed.
+
+The history is imported automatically: once when Home Assistant starts, and again whenever a new session appears. You can also trigger it by hand from **Developer tools → Actions**:
+
+```yaml
+action: athlon_groendus.import_history
+data: {}
+```
+
+It is safe to run repeatedly — statistics are keyed on (statistic id, hour), so a re-run overwrites those hours rather than adding to them.
+
+This creates two **external statistics**:
+
+- `athlon_groendus:<chargepoint>_energy` — kWh
+- `athlon_groendus:<chargepoint>_cost` — in the tariff currency
+
+### Using it in the Energy Dashboard
+
+In **Settings → Dashboards → Energy → Add consumption**, pick the `athlon_groendus:..._energy` statistic, and select the `..._cost` statistic as the tracked cost.
+
+> **Do not also keep the live `sensor.athlon_charging_energy_total` as a source.** The external statistic already covers every session including new ones, so having both counts the same kWh twice.
+
+### Accuracy
+
+A session reports a total with a start and an end — there is no per-hour meter curve. The total is spread across the hours the session covers, weighted by time in each hour. **Daily, monthly and yearly totals are exact**; the hour-by-hour shape is an approximation. Sessions the portal marked `REJECTED`, and sessions that have not finished yet, are excluded.
 
 ## How it works (reverse engineered)
 
