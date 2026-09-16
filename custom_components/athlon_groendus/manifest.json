@@ -9,8 +9,8 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/tgriek/ha-athlon-groendus/issues",
   "requirements": [
-    "boto3==1.42.24",
+    "boto3>=1.42.24,<2",
     "warrant-lite==1.0.4"
   ],
-  "version": "0.3.0"
+  "version": "0.3.1"
 }
