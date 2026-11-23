@@ -17,16 +17,20 @@ DEFAULT_MAX_PAGES = 5
 # validated by a PreAuthentication Lambda trigger. A wrong label fails login
 # with "User is not part of the <label> label" even when the password is right.
 #
-# The portal used to live on athlon.groendus.nl (label "athlon") and moved to
-# thuisladen.groendus.nl (label "groendus"). Both are configurable in the UI so
-# a future move does not require a code change.
-DEFAULT_PORTAL_URL = "https://thuisladen.groendus.nl/"
-DEFAULT_LABEL = "groendus"
+# The portal used to live on athlon.groendus.nl (label "athlon"), then on
+# thuisladen.groendus.nl (label "groendus"), and after the Groendus -> PowerD
+# rebrand on thuisladen.powerd.nl (label "powerd"; the groendus host redirects
+# there). Groendus accounts still pass the label check with either "groendus"
+# or "powerd". Both are configurable in the UI so a future move does not
+# require a code change.
+DEFAULT_PORTAL_URL = "https://thuisladen.powerd.nl/"
+DEFAULT_LABEL = "powerd"
 
 # Labels the portal frontend knows about, in its own priority order. It picks
 # the first one that appears anywhere in the page URL, falling back to
-# "groendus" — we mirror that so a label can be derived from a portal URL.
-KNOWN_LABELS = ("ayvens", "ayvens-ald", "athlon", "groendus")
+# "powerd" — we mirror that so a label can be derived from a portal URL.
+# "groendus" is kept so existing thuisladen.groendus.nl entries keep their label.
+KNOWN_LABELS = ("ayvens", "ayvens-ald", "athlon", "groendus", "powerd")
 
 CLIENT_GROUP = "Portal"
 

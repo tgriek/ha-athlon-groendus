@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to Athlon Groendus",
-        "description": "Enter the login details you use on the Groendus charging portal (thuisladen.groendus.nl).\n\nPortal URL: change this if your portal moves to another address.\nLabel: the tenant your account belongs to. Leave empty to derive it from the portal URL (thuisladen.groendus.nl → groendus).\n\nNote: Home Assistant will store these credentials in the config entry so it can refresh data.",
+        "description": "Enter the login details you use on the PowerD (formerly Groendus) charging portal (thuisladen.powerd.nl).\n\nPortal URL: change this if your portal moves to another address.\nLabel: the tenant your account belongs to. Leave empty to derive it from the portal URL (thuisladen.powerd.nl → powerd).\n\nNote: Home Assistant will store these credentials in the config entry so it can refresh data.",
         "data": {
           "email": "Email",
           "password": "Password",
@@ -21,7 +21,7 @@
     },
     "error": {
       "auth": "Authentication failed. Check your email/password.",
-      "wrong_label": "Your account is not part of this label. Check the portal URL and label (for example 'groendus' for thuisladen.groendus.nl).",
+      "wrong_label": "Your account is not part of this label. Check the portal URL and label (for example 'powerd' for thuisladen.powerd.nl).",
       "no_chargepoints": "No chargepoints found on this account.",
       "unknown": "Unexpected error. Check the logs for details."
     }
@@ -41,7 +41,7 @@
     },
     "error": {
       "auth": "Authentication failed with the stored credentials.",
-      "wrong_label": "Your account is not part of this label. Check the portal URL and label (for example 'groendus' for thuisladen.groendus.nl).",
+      "wrong_label": "Your account is not part of this label. Check the portal URL and label (for example 'powerd' for thuisladen.powerd.nl).",
       "unknown": "Unexpected error. Check the logs for details."
     }
   }

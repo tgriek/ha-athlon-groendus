@@ -33,8 +33,8 @@ from warrant_lite import WarrantLite
 # The portal is white-label: the tenant "label" is validated by a Cognito
 # PreAuthentication Lambda. A wrong label fails with
 # "User is not part of the <label> label" even with correct credentials.
-DEFAULT_PORTAL_URL = "https://thuisladen.groendus.nl/"
-DEFAULT_LABEL = "groendus"
+DEFAULT_PORTAL_URL = "https://thuisladen.powerd.nl/"
+DEFAULT_LABEL = "powerd"
 CLIENT_GROUP = "Portal"
 
 QUERY_BOOTSTRAP = """
@@ -93,8 +93,11 @@ def get_id_token(email: str, password: str, cfg: dict[str, Any], metadata: dict[
         def authenticate_user(self, client: Any = None) -> Any:  # type: ignore[override]
             boto_client = self.client or client
             auth_params = self.get_auth_params()
+            # Mirror the portal's Amplify "CUSTOM_WITH_SRP" flow; the app client
+            # no longer allows plain USER_SRP_AUTH.
+            auth_params["CHALLENGE_NAME"] = "SRP_A"
             response = boto_client.initiate_auth(
-                AuthFlow="USER_SRP_AUTH",
+                AuthFlow="CUSTOM_AUTH",
                 AuthParameters=auth_params,
                 ClientId=self.client_id,
                 ClientMetadata=metadata,
@@ -102,14 +105,19 @@ def get_id_token(email: str, password: str, cfg: dict[str, Any], metadata: dict[
             if response["ChallengeName"] != self.PASSWORD_VERIFIER_CHALLENGE:
                 raise RuntimeError(f"Unsupported challenge: {response.get('ChallengeName')}")
 
-            challenge_response = self.process_challenge(response["ChallengeParameters"])
-            challenge_response["USERNAME"] = self.username
-            return boto_client.respond_to_auth_challenge(
+            params = response["ChallengeParameters"]
+            challenge_response = self.process_challenge(params)
+            challenge_response["USERNAME"] = params.get("USERNAME", self.username)
+            tokens = boto_client.respond_to_auth_challenge(
                 ClientId=self.client_id,
                 ChallengeName=self.PASSWORD_VERIFIER_CHALLENGE,
                 ChallengeResponses=challenge_response,
                 ClientMetadata=metadata,
+                **({"Session": response["Session"]} if response.get("Session") else {}),
             )
+            if tokens.get("ChallengeName"):
+                raise RuntimeError(f"Unsupported follow-up challenge: {tokens['ChallengeName']}")
+            return tokens
 
     client = boto3.client(
         "cognito-idp",

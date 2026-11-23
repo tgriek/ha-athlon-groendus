@@ -217,27 +217,46 @@ class AthlonGroendusClient:
                 self._client_metadata = client_metadata or {}
 
             def authenticate_user(self, client: Any = None) -> Any:  # type: ignore[override]
+                # The portal (Amplify authFlowType "CUSTOM_WITH_SRP") logs in via
+                # CUSTOM_AUTH with an SRP first step. The app client no longer
+                # allows plain USER_SRP_AUTH ("USER_SRP_AUTH is not enabled for
+                # the client"), so we must mirror that flow exactly.
                 boto_client = self.client or client
                 auth_params = self.get_auth_params()
+                auth_params["CHALLENGE_NAME"] = "SRP_A"
                 response = boto_client.initiate_auth(
-                    AuthFlow="USER_SRP_AUTH",
+                    AuthFlow="CUSTOM_AUTH",
                     AuthParameters=auth_params,
                     ClientId=self.client_id,
                     ClientMetadata=self._client_metadata,
                 )
 
                 if response["ChallengeName"] == self.PASSWORD_VERIFIER_CHALLENGE:
-                    challenge_response = self.process_challenge(response["ChallengeParameters"])
-                    challenge_response["USERNAME"] = self.username
+                    challenge_params = response["ChallengeParameters"]
+                    challenge_response = self.process_challenge(challenge_params)
+                    challenge_response["USERNAME"] = challenge_params.get("USERNAME", self.username)
+                    kwargs: dict[str, Any] = {}
+                    if response.get("Session"):
+                        # CUSTOM_AUTH chains challenges through a session token.
+                        kwargs["Session"] = response["Session"]
                     tokens = boto_client.respond_to_auth_challenge(
                         ClientId=self.client_id,
                         ChallengeName=self.PASSWORD_VERIFIER_CHALLENGE,
                         ChallengeResponses=challenge_response,
                         ClientMetadata=self._client_metadata,
+                        **kwargs,
                     )
 
                     if tokens.get("ChallengeName") == self.NEW_PASSWORD_REQUIRED_CHALLENGE:
                         raise ForceChangePasswordException("Change password before authenticating")
+                    if tokens.get("ChallengeName") == "CUSTOM_CHALLENGE":
+                        # The portal can follow up with an emailed one-time code
+                        # (its "EMAIL_MFA_REQUIRED" state); unattended polling
+                        # cannot answer that.
+                        raise NotImplementedError(
+                            "Portal requires an emailed MFA code after the password step; "
+                            "this is not supported"
+                        )
 
                     return tokens
 
